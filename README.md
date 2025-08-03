@@ -503,5 +503,4 @@ LinkedIn: [https://www.linkedin.com/in/sandip-sing/](https://www.linkedin.com/in
 
 ---
 
-- LinkedIn: https://www.linkedin.com/in/sandip-sing/
 
