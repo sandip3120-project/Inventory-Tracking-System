@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Print Labels for Roll {{ roll.batch.material.description}}</h2>
+
+  <div style="margin:1em 0;">
+    <img src="{{ qr_image_url }}" alt="QR Code for {{ roll.roll_id }}" 
+         style="width:200px;height:200px;border:1px solid #333;">
+  </div>
+
+  <p>
+    <strong>URL:</strong><br>
+    <code>{{ qr_link }}</code>
+  </p>
+
+    <div style="margin:1em 0;">
+    <!-- Download QR button -->
+    <a href="{{ qr_image_url }}" download="QR-{{ roll.roll_id }}.png"
+       style="padding:.5em 1em; border:1px solid #333; text-decoration:none; margin-right:1em;">
+      ⬇️ Download QR
+    </a>
+
+    <!-- Copy Link button -->
+    <button id="copy-link" style="padding:.5em 1em; border:1px solid #333;">
+      📋 Copy Link
+    </button>
+    <!-- NEW: Print button -->
+    <form method="post" action="{% url 'print-roll' roll.roll_id %}">
+      {% csrf_token %}
+      <button type="submit"
+            class="btn btn-success"
+            style="margin-top:1em;">
+        🖨️ Print to BarTender
+    </button>
+  </form>
+  </div>
+  
+
+  <script>
+    document.querySelector('#copy-link').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText('{{ qr_link }}');
+        alert('Link copied to clipboard!');
+      } catch (e) {
+        alert('Copy failed, please copy manually: {{ qr_link }}');
+      }
+    });
+  </script>
+
+
+  <p style="margin-top:2em;">
+    <a href="{% url 'material-entry' %}">➥ Enter Another Roll</a>
+  </p>
+{% endblock %}

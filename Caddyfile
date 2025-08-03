@@ -1,0 +1,23 @@
+http://192.168.2.101 {
+	redir https://192.168.2.101{uri} permanent
+}
+
+https://192.168.2.101 {
+	route {
+		handle_path /media/* {
+			root * D:/QRCode-Sandip/ITS/ITS/media
+			file_server
+		}
+
+		handle {
+			reverse_proxy 127.0.0.1:8000
+		}
+	}
+	# serve static assets directly from disk
+
+
+	# everything else goes to Django
+	reverse_proxy 127.0.0.1:8000
+
+	tls D:\QRCode-Sandip\ITS\ITS\192.168.2.101+2.pem D:\QRCode-Sandip\ITS\ITS\192.168.2.101+2-key.pem
+}

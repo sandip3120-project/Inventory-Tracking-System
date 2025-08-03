@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Roll Details: {{ roll.batch.material.description }}</h2>
+  <ul>
+    <li><strong>Material #:</strong> {{ roll.batch.material.material_number }}</li>
+    <li><strong>Description:</strong> {{ roll.batch.material.description }}</li>
+    <li><strong>Batch #:</strong> {{ roll.batch.batch_number }}</li>
+    <li><strong>Size:</strong>
+      {% if roll.thickness_gauge %}{{ roll.thickness_gauge }} gauge{% endif %}
+      {% if roll.thickness_micron %}{{ roll.thickness_micron }} μm{% endif %}
+    </li>
+    <li><strong>Colour:</strong> {{ roll.batch.material.colour }}</li>
+    <li><strong>Weight (KG):</strong> {{ roll.weight_kg }}</li>
+    <li><strong>Current Location:</strong> {{ roll.current_location|default:"(not stored)" }}</li>
+    <li><strong>Status:</strong> {{ roll.status }}</li>
+  </ul>
+
+  <h3>History</h3>
+  <table border="1" cellpadding="5" style="border-collapse:collapse;">
+    <tr><th>Action</th><th>Location</th><th>User</th><th>When</th></tr>
+    {% for tx in history %}
+      <tr>
+        <td>{{ tx.get_action_display }}</td>
+        <td>{% if tx.location %}{{ tx.location.location_code }}{% else %}{% endif %}</td>
+
+        <td>{{ tx.user }}</td>
+        <td>{{ tx.scanned_at }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4">No history yet</td></tr>
+    {% endfor %}
+  </table>
+{% endblock %}

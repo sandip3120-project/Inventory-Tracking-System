@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,user-scalable=no">
+  <title>Plant ITS Mobile</title>
+
+  <!-- QR library -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <style>
+    /* Base reset */
+    * { box-sizing:border-box; margin:0; padding:0; }
+
+    /* Typography & layout */
+    html { font-size: 16px; }
+    @media (max-width: 360px) { html { font-size:14px; } }
+
+    body {
+      font-family: sans-serif;
+      background: #f4f4f4;
+      color: #333;
+    }
+
+    /* header now a flex container */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #007bff;
+      color: #fff;
+      padding: 0.75rem 1rem;
+      font-size: 1.25rem;
+    }
+    header .title {
+      flex: 1;
+      text-align: center;
+    }
+    header .user-info {
+      font-size: 0.9rem;
+      margin-left: auto;
+    }
+    header .user-info a {
+      color: #fff;
+      text-decoration: underline;
+      margin-left: 0.5rem;
+    }
+
+
+    main {
+      padding: 1rem;
+      padding-bottom: 6rem; /* space for footer */
+    }
+
+    /* QR reader container: fluid square */
+    #reader {
+      width: 80vw;
+      max-width: 300px;
+      aspect-ratio: 1 / 1;
+      margin: 0 auto 1rem;
+
+      border: 2px dashed #007bff;
+      border-radius: 0.5rem;
+      background: #fff;
+      display:block;
+    }
+
+    /* Buttons */
+    .btn {
+      display: block;
+      width: 90vw;
+      max-width: 400px;
+      margin: 0.5rem auto;
+      padding: 0.75rem;
+      font-size: 1rem;
+      color: #fff;
+      background: #007bff;
+      border: none;
+      border-radius: 0.5rem;
+      text-align: center;
+      cursor: pointer;
+    }
+    .btn.secondary {
+      background: #6c757d;
+    }
+    .icon-toggle {
+      background: transparent;
+      border: none;
+      padding: 0;
+      margin-right: 0.75rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .icon-toggle svg {
+      display: block;
+    }
+    .logout-link {
+      background: transparent;
+      border: none;
+      color: #fff;
+      text-decoration: underline;
+      cursor: pointer;
+      font: inherit;
+    }
+
+    /* hide outline but keep a11y focus ring */
+    .icon-toggle:focus,
+    .logout-link:focus {
+      outline: none;
+    }
+    .icon-toggle:focus-visible {
+      outline: 2px solid #fff;
+      outline-offset: 2px;
+    }
+    /* Lists */
+    .list h3 {
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+    .list ul {
+      list-style: none;
+      padding-left: 1rem;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .list li {
+      margin-bottom: 0.25rem;
+      font-size: 0.95rem;
+      word-break: break-all;
+    }
+
+    /* Footer nav */
+    footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      height: 60px;
+      display: flex;
+      background: #fff;
+      border-top: 1px solid #ccc;
+      z-index: 1000;
+    }
+    footer button {
+      flex: 1;
+      border: none;
+      background: none;
+      font-size: 0.85rem;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    footer button.active {
+      background: #e9ecef;
+    }
+    footer button:hover {
+      background: #f1f1f1;
+    }
+  </style>
+  <script>
+    // grab CSRF token from Django’s cookie
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        for (let c of document.cookie.split(';')) {
+          c = c.trim();
+          if (c.startsWith(name + '=')) {
+            cookieValue = decodeURIComponent(c.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+    window.CSRF_TOKEN = getCookie('csrftoken');
+  </script>
+</head>
+<body>
+  <header style="display:flex;justify-content:space-between;align-items:center;
+                 background:#007bff;color:#fff;padding:1rem;font-size:1.25rem">
+
+    <button id="scanModeToggle"
+            class="icon-toggle"
+            title="Switch to Keyboard Scanner">
+      <svg id="scanIcon" width="24" height="24" viewBox="0 0 24 24" fill="white">
+        <path d="M4 7h4l2-3h4l2 3h4v14H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>
+      </svg>
+      
+    </button>             
+    <span id="page-title">Plant ITS Mobile</span>
+    {% if request.user.is_authenticated %}
+      <div style="display:flex;align-items:center;font-size:1rem">
+        <span style="margin-right:0.75rem">{{ request.user.username }}</span>
+        <form action="{% url 'logout' %}" method="post" style="margin:0">
+          {% csrf_token %}
+          <button type="submit"
+                  style="background:transparent;border:none;color:#fff;
+                         text-decoration:underline;cursor:pointer;font:inherit;padding:0">
+            Logout
+          </button>
+          
+        </form>
+      </div>
+    {% endif %}
+
+  </header>
+
+  <main>
+    <input id="keyboardInput"
+       type="text"
+       autocomplete="off"
+       autocorrect="off"
+       autocapitalize="none"
+       spellcheck="false"
+       style="position:absolute;opacity:0;top:0;left:0;width:1px;height:1px;border:none;"
+    />
+
+    {% block content %}{% endblock %}
+        {% if messages %}
+      <div class="messages">
+        {% for msg in messages %}
+          <div class="alert {{ msg.tags }}">
+            {{ msg }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </main>
+
+  <footer>
+    {% if enable_qa_scan %}
+      <button id="nav-qa">📷<br/>QA</button>
+    {% endif %}
+    <button id="nav-store">📦<br/>Store</button>
+    <button id="nav-dispatch">🚚<br/>Dispatch</button>
+    <button id="nav-view">🔍<br/>Scan</button>
+  </footer>
+
+  <script>
+    (function(){
+      const path = window.location.pathname;
+      // Define your nav targets and their paths
+      const navs = [
+        { id: 'nav-qa',       url: '/scan/qa/'       },
+        { id: 'nav-store',    url: '/scan/store/'    },
+        { id: 'nav-dispatch', url: '/scan/dispatch/' },
+        { id: 'nav-view',     url: '/scan/view/'     },
+      ];
+
+      for (const {id, url} of navs) {
+        const btn = document.getElementById(id);
+        if (!btn) continue;                  // skip missing buttons
+
+        // Highlight if current path matches
+        if (path.startsWith(url)) {
+          btn.classList.add('active');
+        }
+
+        // Attach navigation handler
+        btn.addEventListener('click', () => {
+          if (window.location.pathname !== url) {
+            window.location.href = url;
+          }
+        });
+      }
+
+      // Speech helper (unchanged)
+      window.speak = function(msg) {
+        if (!window.speechSynthesis) return;
+        const utter = new SpeechSynthesisUtterance(msg);
+        utter.lang = /[^\x00-\x7F]/.test(msg) ? 'hi-IN' : 'en-US';
+        window.speechSynthesis.speak(utter);
+      };
+    })();
+  </script>
+
+  <script>
+    window.CURRENT_USER = "{{ request.user.username|escapejs }}";
+  </script>
+  <script>
+  // 1) Toggle button & persistence
+  const scanModeToggle = document.getElementById('scanModeToggle');
+  let scanMode = localStorage.getItem('scanMode') || 'camera';
+
+  function applyScanMode(m) {
+    scanMode = m;
+    localStorage.setItem('scanMode', m);
+    const scanIcon = document.getElementById('scanIcon');
+    if (m === 'camera') {
+      scanIcon.innerHTML = '<path d="M4 7h4l2-3h4l2 3h4v14H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>';
+      scanModeToggle.title = 'Switch to Keyboard Scanner';
+    } else {
+      scanIcon.innerHTML = '<path d="M3 5h18v14H3zm2 2v2h4V7zm6 0v2h4V7zm6 0v2h4V7zm-12 4v2h18v-2zm0 4v2h18v-2z"/>';
+      scanModeToggle.title = 'Switch to Camera Scanner';
+    }
+    
+    window.dispatchEvent(new CustomEvent('scanModeChanged', {detail:m}));
+  }
+
+  // wire the toggle button
+  scanModeToggle.addEventListener('click', ()=> {
+    applyScanMode(scanMode==='camera' ? 'keyboard':'camera');
+    const scanIcon = document.getElementById('scanIcon');
+    if (scanMode === 'camera') {
+      scanIcon.innerHTML = '<path d="M4 7h4l2-3h4l2 3h4v14H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/>'; 
+      scanModeToggle.title = 'Switch to Keyboard Scanner';
+    } else {
+      // simple “keyboard” shape
+      scanIcon.innerHTML = '<path d="M3 5h18v14H3zm2 2v2h4V7zm6 0v2h4V7zm6 0v2h4V7zm-12 4v2h18v-2zm0 4v2h18v-2z"/>';
+      scanModeToggle.title = 'Switch to Camera Scanner';
+    }
+  });
+  // init on load
+  applyScanMode(scanMode);
+
+
+  // 2) Keyboard scanner infrastructure
+  const keyboardInput = document.getElementById('keyboardInput');
+  function startKeyboardListener() {
+    keyboardInput.style.opacity = '1';
+    keyboardInput.focus();
+    keyboardInput.addEventListener('keydown', onKeyboardScan);
+  }
+  function stopKeyboardListener() {
+    keyboardInput.style.opacity = '0';
+    keyboardInput.blur();
+    keyboardInput.removeEventListener('keydown', onKeyboardScan);
+  }
+  function onKeyboardScan(e) {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = keyboardInput.value.trim();
+    keyboardInput.value = '';
+    // let each page handle this by listening for 'keyboardScanned'
+    window.dispatchEvent(new CustomEvent('keyboardScanned', {detail:code}));
+  }
+
+  // 3) React to mode changes
+  window.addEventListener('scanModeChanged', e=>{
+    if (e.detail==='camera') {
+      stopKeyboardListener();
+    } else {
+      startKeyboardListener();
+    }
+  });
+  </script>
+
+</body>
+</html>

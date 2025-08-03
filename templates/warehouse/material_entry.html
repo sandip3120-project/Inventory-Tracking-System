@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Batch Data Entry & Upload</h2>
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <fieldset style="border:1px solid #ccc; padding:1rem;">
+      <legend>Manual Entry</legend>
+      {{ form.material_number.label_tag }} {{ form.material_number }} {{ form.material_number.errors }}<br/>
+      {{ form.description.label_tag }}     {{ form.description }}     {{ form.description.errors }}<br/>
+      {{ form.batch_number.label_tag }}    {{ form.batch_number }}    {{ form.batch_number.errors }}<br/>
+      {{ form.weight_kg.label_tag }}       {{ form.weight_kg }}       {{ form.weight_kg.errors }}<br/>
+      {{ form.posting_date.label_tag }}    {{ form.posting_date }}    {{ form.posting_date.errors }}
+      {{ form.department.label_tag }}     {{ form.department }}
+      {{ form.department.errors }}<br/>
+    </fieldset>
+
+    <p style="text-align:center; margin:1em 0;">— or —</p>
+
+    <fieldset style="border:1px solid #ccc; padding:1rem;">
+      <legend>Bulk Upload (SAP Excel/CSV)</legend>
+      {{ form.data_file.label_tag }}<br/>
+      {{ form.data_file }} {{ form.data_file.errors }}<br/>
+      <small>We pull Material, Description, Batch, Posting Date, Quantity in Kg</small>
+    </fieldset>
+
+    <button type="submit" class="btn btn-primary mt-3">
+      Process & Next
+    </button>
+  </form>
+{% endblock %}

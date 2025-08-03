@@ -1,0 +1,132 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+  <script>
+    // Set page title & speak instruction
+    document.getElementById('page-title').textContent = 'QA: रोल स्कैन';
+    speak('कृपया बनाए गए रोल स्कैन करें');
+  </script>
+
+  <p style="margin-bottom:1em; text-align:center;">
+    Scan produced rolls<br/>कृपया बनाए गए रोल स्कैन करें
+  </p>
+  <input id="kbd‐input" type="text" autocomplete="off"
+    autocapitalize="off" autocorrect="off" spellcheck="false"
+    style="position:absolute;top:-9999px;left:-9999px;"/>
+  <div id="reader"></div>
+
+  <div class="list">
+    <h3>Scanned Rolls:<br/>स्कैन किए गए रोल</h3>
+    <ul id="scanned-list"></ul>
+  </div>
+
+  <button class="btn secondary" onclick="resetList()">
+    Done / पूरा हुआ
+  </button>
+
+  <script>
+    const scanned = new Set();
+    const listEl  = document.getElementById('scanned-list');
+
+    // Extract just the roll_id if the QR gave a full URL
+    function parseRollId(payload) {
+      try {
+        if (payload.startsWith('http')) {
+          return new URL(payload).pathname.split('/').filter(Boolean).pop();
+        }
+      } catch {}
+      return payload;
+    }
+
+    async function onScanSuccess(raw) {
+      const id = parseRollId(raw);
+      if (scanned.has(id)) return;
+
+      // 1) validate roll exists
+      let res = await fetch(`/api/rolls/${id}/`);
+      if (!res.ok) return alert(`Roll "${id}" not found.`);
+
+      // 2) prevent double‑QA
+      res = await fetch(
+        `/api/transactions/?roll=${id}&ordering=-scanned_at&limit=1`
+      );
+      const last = (await res.json())[0] || {};
+      if (last.action === 'QA_SCAN') {
+        return alert(`Roll "${id}" already QA-checked.`);
+      }
+
+      // 3) POST QA_SCAN
+      const post = await fetch('/api/transactions/', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': window.CSRF_TOKEN
+        },
+        body: JSON.stringify({
+          roll: id,
+          action: 'QA_SCAN',
+          user: window.CURRENT_USER
+        })
+      });
+      if (!post.ok) {
+        const err = await post.json().catch(()=>null);
+        console.error('QA error', err);
+        return alert(`Error recording QA: ${JSON.stringify(err)}`);
+      }
+
+      // 4) update UI & speak
+      scanned.add(id);
+      const li = document.createElement('li');
+      li.textContent = id;
+      listEl.appendChild(li);
+      speak(`रोल ${id.slice(0,5)} स्कैन हुआ`);
+    }
+
+    // start camera
+    new Html5Qrcode("reader")
+      .start({ facingMode:'environment' }, { fps:10, qrbox:250 }, onScanSuccess)
+      .catch(err => {
+        console.error('QA scanner error', err);
+        alert('कृपया कैमरा अनुमति दें');
+      });
+
+    function resetList(){
+      scanned.clear();
+      listEl.innerHTML = '';
+      speak('सूची रीसेट हुई');
+    }
+    // 1) capture hardware‐scanner keystrokes
+    let buffer = '';
+    function handleKbd(evt) {
+      if (evt.key.length === 1) buffer += evt.key;
+      else if (evt.key === 'Enter' && buffer) {
+        handleDecode(buffer);
+        buffer = '';
+        evt.preventDefault();
+      }
+    }
+
+    // 2) show/hide camera vs keyboard
+    const cameraEl = document.getElementById('reader');
+    const kbdInput = document.getElementById('kbd‐input');
+    function updateScannerUI(mode) {
+      if (mode === 'camera') {
+        cameraEl.style.display = 'block';
+        document.removeEventListener('keydown', handleKbd);
+      } else {
+        cameraEl.style.display = 'none';
+        buffer = '';
+        kbdInput.focus();
+        document.addEventListener('keydown', handleKbd);
+      }
+    }
+
+
+    // init & listen for toggles
+    updateScannerUI(localStorage.getItem('scanMode') || 'camera');
+    window.addEventListener('scanModeChanged', e => updateScannerUI(e.detail));
+
+
+
+  </script>
+{% endblock %}

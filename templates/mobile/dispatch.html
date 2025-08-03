@@ -1,0 +1,347 @@
+{% extends "mobile/base.html" %}
+{% block content %}
+  <script>
+    document.getElementById('page-title').textContent = 'Dispatch / ट्रांसफर';
+    speak('कृपया एक क्रिया चुनें');
+  </script>
+
+  <!-- toast container -->
+  <div id="toast-container" style="position:fixed;top:1rem;left:50%;transform:translateX(-50%);
+       z-index:10000;pointer-events:none;"></div>
+
+  <!-- debug log (optional; remove in stable) -->
+  <pre id="debug-log" style="position:fixed;bottom:0;left:0;width:100%;height:100px;
+       background:#111;color:#0f0;overflow:auto;font-size:10px;z-index:10000;margin:0;"></pre>
+
+  <p style="text-align:center; font-size:1rem; margin-bottom:1rem;">
+    Choose action, scan rolls in batch<br/>
+    पहले क्रिया चुनें, फिर रोल बैच में स्कैन करें
+  </p>
+
+  <!-- 1) Action buttons -->
+  <div style="text-align:center; margin-bottom:1rem;">
+    <button id="to-customer" class="btn">🚚 Dispatch to Customer</button>
+    <button id="to-dept"     class="btn secondary">🔄 Transfer Dept</button>
+  </div>
+
+  <!-- 2a) Customer input -->
+  <div id="cust-div" style="display:none; text-align:center; margin-bottom:1rem;">
+    <input id="cust-input" type="text" placeholder="Customer name"
+           style="width:80%; padding:.5rem;" />
+  </div>
+
+  <!-- 2b) Dept selector -->
+  <div id="dept-div" style="display:none; text-align:center; margin-bottom:1rem;">
+    <select id="dept-select" class="btn secondary"
+            style="width:80%; padding:.5rem;">
+      {% for d in departments %}
+        <option value="{{ d.code }}">{{ d.code }} – {{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <!-- 3) Scan Location button (only for TRANSFER) -->
+  <button id="scan-location" class="btn secondary"
+          style="display:none; margin-bottom:1rem;">
+    Scan Location<br/>लोकेशन स्कैन करें
+  </button>
+
+  <!-- hidden keyboard input -->
+  <input id="kbd-input" type="text" autocomplete="off"
+    autocapitalize="off" autocorrect="off" spellcheck="false"
+    style="position:absolute;top:-9999px;left:-9999px;"/>
+
+  <!-- 4) Scanner viewport -->
+  <div id="reader"></div>
+
+  <!-- 5) List scanned rolls -->
+  <div class="list" style="margin-top:1rem;">
+    <h3>Scanned Rolls:<br/>स्कैन किए रोल</h3>
+    <ul id="roll-list"></ul>
+  </div>
+
+  <!-- 6) Confirm Dispatch button -->
+  <button id="confirm-dispatch" class="btn"
+          style="display:none; margin-top:1rem;">
+    Confirm Dispatch<br/>Dispatch पुष्टि करें
+  </button>
+
+  <script>
+    // helpers
+    function showToast(msg, duration = 2500) {
+      const c = document.getElementById('toast-container');
+      const d = document.createElement('div');
+      d.textContent = msg;
+      d.style = `
+        background: rgba(0,0,0,.85); color:#fff; padding:8px 14px;
+        margin-top:6px; border-radius:6px; font-size:.9rem;
+        max-width:90vw; display:inline-block;
+      `;
+      c.appendChild(d);
+      setTimeout(() => d.remove(), duration);
+    }
+    function log(...args) {
+      console.log(...args);
+      const box = document.getElementById('debug-log');
+      box.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ') + '\n';
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function parseRollId(s) {
+      try {
+        if (s.startsWith('http')) {
+          return new URL(s).pathname.split('/').filter(Boolean).pop();
+        }
+      } catch {}
+      return s.trim();
+    }
+
+    // state
+    let mode = null;             // 'DISPATCH' or 'TRANSFER'
+    let customer = null;
+    let deptCode = null;
+    let locationMode = false;    // only for TRANSFER flow
+    const rolls = [];
+    const csrf = window.CSRF_TOKEN;
+    let scanLock = false;
+
+    // dom
+    const custDiv   = document.getElementById('cust-div');
+    const deptDiv   = document.getElementById('dept-div');
+    const scanLocB  = document.getElementById('scan-location');
+    const confirmB  = document.getElementById('confirm-dispatch');
+    const rollList  = document.getElementById('roll-list');
+
+    // action selection
+    document.getElementById('to-customer').onclick = () => {
+      mode = 'DISPATCH'; locationMode = false;
+      customer = null; deptCode = null;
+      custDiv.style.display = 'block';
+      deptDiv.style.display = 'none';
+      scanLocB.style.display = 'none';
+      confirmB.style.display = 'none';
+      rolls.length = 0; rollList.innerHTML = '';
+      speak('ग्राहक का नाम दर्ज करें');
+      showToast('Dispatch mode selected');
+    };
+    document.getElementById('to-dept').onclick = () => {
+      mode = 'TRANSFER'; locationMode = false;
+      deptCode = null; customer = null;
+      custDiv.style.display = 'none';
+      deptDiv.style.display = 'block';
+      scanLocB.style.display = 'none';
+      confirmB.style.display = 'none';
+      rolls.length = 0; rollList.innerHTML = '';
+      speak('विभाग चुनें');
+      showToast('Transfer mode selected');
+    };
+
+    // customer input
+    document.getElementById('cust-input').oninput = e => {
+      customer = e.target.value.trim();
+      if (mode !== 'DISPATCH') return;
+      if (rolls.length && customer) {
+        confirmB.style.display = 'block';
+      } else {
+        confirmB.style.display = 'none';
+      }
+    };
+
+    // dept select
+    document.getElementById('dept-select').onchange = e => {
+      deptCode = e.target.value;
+      if (mode === 'TRANSFER' && rolls.length && deptCode) {
+        scanLocB.style.display = 'block';
+      } else {
+        scanLocB.style.display = 'none';
+      }
+    };
+
+    // decode handler
+    async function handleDecode(raw) {
+      if (scanLock) {
+        log('[DISPATCH] scan locked, skipping');
+        return;
+      }
+      scanLock = true;
+      try {
+        log('[DISPATCH] handleDecode raw:', raw);
+
+        if (!mode) {
+          showToast('⚠️ Choose action first');
+          speak('कृपया पहले एक क्रिया चुनें');
+          return;
+        }
+
+        const id = parseRollId(raw);
+
+        // TRANSFER location commit
+        if (mode === 'TRANSFER' && locationMode) {
+          if (!deptCode) {
+            showToast('Select department before location');
+            return;
+          }
+          const location = parseRollId(raw);
+          speak(`लोकेशन ${location} स्कैन किया गया`);
+          showToast(`Transferring to ${deptCode} at ${location}`);
+          // commit TRANSFER for each roll
+          for (const r of rolls) {
+            const res = await fetch('/api/transactions/', {
+              method:'POST',
+              credentials:'same-origin',
+              headers:{
+                'Content-Type':'application/json',
+                'X-CSRFToken':csrf
+              },
+              body: JSON.stringify({
+                roll: r,
+                action: 'TRANSFER',
+                location,
+                user: window.CURRENT_USER
+              })
+            });
+            if (!res.ok) {
+              const err = await res.json().catch(()=>null);
+              showToast(`❌ Error on transfer: ${r}`);
+              console.error(err);
+              return;
+            }
+          }
+          showToast(`✅ ${rolls.length} rolls transferred to ${deptCode} at ${location}.`);
+          return setTimeout(() => location.reload(), 500);
+        }
+
+        // batch scan (either DISPATCH or TRANSFER pre-location)
+        if (rolls.includes(id)) {
+          showToast(`Duplicate roll ${id.slice(0,8)}`);
+          return;
+        }
+
+        const ok = await fetch(`/api/rolls/${id}/`).then(r => r.ok);
+        if (!ok) {
+          showToast(`❌ Roll "${id}" not found.`); 
+          return;
+        }
+
+        rolls.push(id);
+        const li = document.createElement('li');
+        li.textContent = id.slice(0,8);
+        rollList.appendChild(li);
+        speak(`रोल ${id.slice(0,8)} जोड़ा`);
+        showToast(`Roll added: ${id.slice(0,8)}`);
+
+        // show next appropriate control
+        if (mode === 'DISPATCH') {
+          if (customer) confirmB.style.display = 'block';
+        } else if (mode === 'TRANSFER') {
+          if (deptCode) scanLocB.style.display = 'block';
+        }
+      } finally {
+        scanLock = false;
+      }
+    }
+
+    // camera scanner
+    const qr = new Html5Qrcode("reader");
+    function startCamera() {
+      qr.start(
+        { facingMode:'environment' },
+        { fps:10, qrbox:250 },
+        handleDecode,
+        err => {
+          log('scanner error', err);
+          showToast('कृपया कैमरा अनुमति दें');
+        }
+      ).then(() => log('camera started')).catch(e => {
+        console.error('failed to start camera', e);
+        showToast('Camera initialization failed');
+      });
+    }
+    startCamera();
+
+    // confirm dispatch
+    confirmB.onclick = async () => {
+      if (mode !== 'DISPATCH') return;
+      if (!customer) {
+        showToast('Enter customer name');
+        return;
+      }
+      if (!rolls.length) {
+        showToast('Scan at least one roll');
+        return;
+      }
+      speak(`डिस्पैच ${customer} को`);
+      showToast(`Dispatching ${rolls.length} rolls to ${customer}`);
+      for (const r of rolls) {
+        const res = await fetch('/api/transactions/', {
+          method:'POST',
+          credentials:'same-origin',
+          headers:{
+            'Content-Type':'application/json',
+            'X-CSRFToken':csrf
+          },
+          body: JSON.stringify({
+            roll: r,
+            action: 'DISPATCH',
+            customer,
+            user: window.CURRENT_USER
+          })
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(()=>null);
+          showToast(`❌ Error on dispatch: ${r}`);
+          console.error(err);
+          return;
+        }
+      }
+      showToast(`✅ Dispatched ${rolls.length} rolls to ${customer}!`);
+      setTimeout(() => location.reload(), 500);
+    };
+
+    // scan location toggle for transfer
+    scanLocB.onclick = () => {
+      if (mode !== 'TRANSFER') return;
+      if (!deptCode || !rolls.length) {
+        showToast('पहले रोल स्कैन करें और विभाग चुनें');
+        return;
+      }
+      locationMode = true;
+      speak('कृपया लोकेशन स्कैन करें');
+      showToast('Now scan department location');
+    };
+
+    // hardware / keyboard scanner
+    let buffer = '';
+    function handleKbd(evt) {
+      if (evt.key === 'Shift' || evt.key === 'Control' || evt.key === 'Alt' || evt.key === 'Meta') return;
+      if (evt.key.length === 1) buffer += evt.key;
+      else if (evt.key === 'Enter' && buffer) {
+        handleDecode(buffer);
+        buffer = '';
+        evt.preventDefault();
+      }
+    }
+
+    // toggle camera vs keyboard
+    const cameraEl = document.getElementById('reader');
+    const kbdInput = document.getElementById('kbd-input');
+    function updateScannerUI(scanMode) {
+      if (scanMode === 'camera') {
+        cameraEl.style.display = 'block';
+        document.removeEventListener('keydown', handleKbd);
+        startCamera(); // ensure running
+      } else {
+        cameraEl.style.display = 'none';
+        buffer = '';
+        kbdInput.focus();
+        document.addEventListener('keydown', handleKbd);
+      }
+    }
+    updateScannerUI(localStorage.getItem('scanMode') || 'camera');
+    window.addEventListener('scanModeChanged', e => {
+      const m = e.detail;
+      localStorage.setItem('scanMode', m);
+      updateScannerUI(m);
+    });
+  </script>
+{% endblock %}
