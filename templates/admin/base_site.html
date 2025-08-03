@@ -1,0 +1,26 @@
+{% extends "admin/base.html" %}
+{% load static i18n %}
+
+{# ——— Branding on the left: your logo + admin home link ——— #}
+{% block branding %}
+  <h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+      <img src="{% static 'images/company-logo.png' %}"
+           alt="Company Logo"
+           style="height:2.5rem; vertical-align:middle;" />
+      <span style="margin-left:.5rem; vertical-align:middle;">
+        Plant ITS
+      </span>
+    </a>
+  </h1>
+{% endblock %}
+
+{# ——— Global nav on the right: your audit button ——— #}
+{% block nav-global %}
+  {{ block.super }}
+  <a href="{% url 'admin:warehouse_master_export' %}"
+     class="button"
+     style="margin-left:1rem;">
+    Download Master Audit
+  </a>
+{% endblock %}

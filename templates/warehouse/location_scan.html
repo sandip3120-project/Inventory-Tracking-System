@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block content %}
+  <h2>Location {{ location.location_code }} Contents</h2>
+  <ul>
+    {% for tx in transactions %}
+      <li>{{ tx.roll.roll_id|slice:":8" }}… @ {{ tx.scanned_at }}</li>
+    {% empty %}
+      <li>(no rolls here)</li>
+    {% endfor %}
+  </ul>
+{% endblock %}
