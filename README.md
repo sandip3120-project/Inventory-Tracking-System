@@ -391,7 +391,7 @@ netsh advfirewall firewall add rule name="Allow Django 8000" dir=in action=allow
 
 ## Screenshots / UI Gallery
 
-*(Replace placeholders with real screenshots)*
+
 
 ### Dashboard
 
