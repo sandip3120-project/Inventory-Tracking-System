@@ -1,0 +1,6 @@
+[2025-08-03 11:54:24,721] INFO apscheduler.scheduler: Adding job tentatively -- it will be properly scheduled when the scheduler starts
+[2025-08-03 11:54:24,748] INFO apscheduler.scheduler: Added job "reconcile_roll_counts" to job store "default"
+[2025-08-03 11:54:24,750] INFO apscheduler.scheduler: Scheduler started
+[2025-08-03 11:54:24,771] INFO django.utils.autoreload: Watching for file changes with StatReloader
+[2025-08-03 11:54:25,848] INFO numexpr.utils: Note: NumExpr detected 16 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+[2025-08-03 11:54:25,849] INFO numexpr.utils: NumExpr defaulting to 8 threads.

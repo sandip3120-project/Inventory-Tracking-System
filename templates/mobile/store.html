@@ -2,16 +2,8 @@
 {% block content %}
   <script>
     document.getElementById('page-title').textContent = 'Store: रोल एवं लोकेशन स्कैन';
-    speak('Please scan the roll, कृपया रोल स्कैन करें');
+    speak('Please Scan The Roll कृपया रोल स्कैन करें');
   </script>
-
-  <!-- toast container -->
-  <div id="toast-container" style="position:fixed;top:1rem;left:50%;transform:translateX(-50%);
-       z-index:10000;pointer-events:none;"></div>
-
-  <!-- debug log (optional, remove in stable) -->
-  <pre id="debug-log" style="position:fixed;bottom:0;left:0;width:100%;height:100px;
-       background:#111;color:#0f0;overflow:auto;font-size:10px;z-index:10000;margin:0;"></pre>
 
   <p style="text-align:center; font-size:1rem; margin-bottom:1rem;">
     Scan rolls (batch), then rack location<br/>
@@ -19,10 +11,11 @@
   </p>
 
   <!-- Scanner viewport -->
-  <input id="kbd-input" type="text" autocomplete="off"
+  <input id="kbd‐input" type="text" autocomplete="off"
     autocapitalize="off" autocorrect="off" spellcheck="false"
     style="position:absolute;top:-9999px;left:-9999px;"/>
-  <div id="reader"></div>
+  <div id="reader"></div>  
+  
 
   <!-- List of scanned rolls -->
   <div class="list" style="margin-top:1em;">
@@ -36,167 +29,121 @@
   </button>
 
   <script>
-    // helpers
-    function showToast(msg, duration = 2500) {
-      const c = document.getElementById('toast-container');
-      const d = document.createElement('div');
-      d.textContent = msg;
-      d.style = `
-        background: rgba(0,0,0,.85); color:#fff; padding:8px 14px;
-        margin-top:6px; border-radius:6px; font-size:.9rem;
-        max-width:90vw; display:inline-block;
-      `;
-      c.appendChild(d);
-      setTimeout(() => d.remove(), duration);
-    }
-
-    function log(...args) {
-      console.log(...args);
-      const box = document.getElementById('debug-log');
-      box.textContent += args.map(a => (typeof a === 'object' ? JSON.stringify(a) : a)).join(' ') + '\n';
-      box.scrollTop = box.scrollHeight;
-    }
-
     function parseRollId(s) {
       try {
         if (s.startsWith('http')) {
           return new URL(s).pathname.split('/').filter(Boolean).pop();
         }
-      } catch (e) {
-        // fallthrough
-      }
+      } catch {}
       return s.trim();
     }
 
-    // state
     const rolls = [];
     let locationMode = false;
-    let scanLock = false;
-
     const listEl = document.getElementById('roll-list');
     const locBtn = document.getElementById('scan-location');
 
     async function handleDecode(raw) {
-      if (scanLock) {
-        log('[STORE] skipping because locked');
-        return;
-      }
-      scanLock = true;
-      try {
-        log('[STORE] handleDecode called with:', raw);
-        const id = parseRollId(raw);
+      console.log('[STORE] handleDecode called with:', raw);
+      const id = parseRollId(raw);
 
-        if (!locationMode) {
-          log('[STORE] Batch mode, id=', id);
-          if (rolls.includes(id)) {
-            log('[STORE] duplicate roll, skip:', id);
-            showToast(`Duplicate roll ${id.slice(0,8)}`);
-            return;
-          }
-
-          const ok = await fetch(`/api/rolls/${id}/`).then(r => r.ok);
-          if (!ok) {
-            log('[STORE] roll not found:', id);
-            showToast(`❌ Roll "${id}" not found.`); 
-            return;
-          }
-
-          rolls.push(id);
-          const li = document.createElement('li');
-          li.textContent = id;
-          listEl.appendChild(li);
-          speak(`रोल ${id.slice(0,8)} जोड़ा`);
-          showToast(`Roll added: ${id.slice(0,8)}`);
-
-          if (rolls.length === 1) {
-            locBtn.style.display = 'block';
-            log('[STORE] showing Scan Location button');
-          }
-        } else {
-          log('[STORE] Rack mode, committing', rolls.length, 'rolls');
-          const location = parseRollId(raw);
-          speak(`लोकेशन ${location} स्कैन किया गया`);
-          showToast(`Storing at ${location}`);
-
-          for (const r of rolls) {
-            log('[STORE] PUTAWAY', r, '→', location);
-            const res = await fetch('/api/transactions/', {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': window.CSRF_TOKEN
-              },
-              body: JSON.stringify({ roll: r, action: 'PUTAWAY', location, user: window.CURRENT_USER })
-            });
-            if (!res.ok) {
-              const err = await res.json().catch(() => null);
-              console.error('[STORE] PUTAWAY error', err);
-              showToast(`❌ Error storing ${r}`);
-              return;
-            }
-          }
-
-          showToast(`✅ ${rolls.length} rolls stored at ${location}.`);
-          setTimeout(() => location.reload(), 500);
+      if (!locationMode) {
+        console.log('[STORE] Batch mode, id=', id);
+        if (rolls.includes(id)) {
+          console.log('[STORE] Skipping duplicate roll:', id);
+          return;
         }
-      } finally {
-        scanLock = false;
+
+        const ok = await fetch(`/api/rolls/${id}/`).then(r => r.ok);
+        if (!ok) {
+          console.warn('[STORE] Roll not found:', id);
+          return alert(`❌ Roll "${id}" not found.\n❌ रोल "${id}" नहीं मिला।`);
+        }
+
+        
+
+        rolls.push(id);
+        const li = document.createElement('li');
+        li.textContent = id;
+        listEl.appendChild(li);
+        speak(`रोल ${id.slice(0,8)} जोड़ा`);
+
+        if (rolls.length === 1) {
+          locBtn.style.display = 'block';
+          console.log('[STORE] Showing Scan Location button');
+        }
+
+      } else {
+        console.log('[STORE] Rack mode, committing', rolls.length, 'rolls');
+        const location = parseRollId(raw);
+        speak(`लोकेशन ${location} स्कैन किया गया`);
+
+        for (const r of rolls) {
+          console.log('[STORE] PUTAWAY', r, '→', location);
+          const res = await fetch('/api/transactions/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type':'application/json',
+              'X-CSRFToken': window.CSRF_TOKEN
+            },
+            body: JSON.stringify({ roll: r, action: 'PUTAWAY', location, user: window.CURRENT_USER })
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(()=>null);
+            console.error('[STORE] PUTAWAY error', err);
+            return alert(`❌ Error: ${JSON.stringify(err)}`);
+          }
+        }
+
+        console.log('[STORE] All PUTAWAYs succeeded');
+        alert(
+          `✅ ${rolls.length} rolls stored at ${location}.\n` +
+          `✅ ${rolls.length} रोल ${location} पर स्टोर किए गए।`
+        );
+        return location.reload();
       }
     }
 
-    // create & start camera scanner
-    log('[STORE] Creating Html5Qrcode instance');
+    console.log('[STORE] Creating Html5Qrcode instance');
     const qr = new Html5Qrcode("reader");
 
-    function startCameraScanner() {
-      log('[STORE] Starting scanner...');
-      qr.start(
-        { facingMode: 'environment' },
-        { fps: 10, qrbox: 250 },
-        handleDecode,
-        err => log('[STORE] decode error:', err)
-      )
-      .then(() => log('[STORE] scanner.start() resolved — camera should be live'))
-      .catch(err => {
-        console.error('[STORE] scanner startup error:', err);
-        showToast('कृपया कैमरा अनुमति दें');
-      });
-    }
-
-    startCameraScanner();
-
-    // rack button
-    locBtn.addEventListener('click', () => {
-      log('[STORE] Scan Location button clicked — switching to rack mode');
-      locationMode = true;
-      speak('कृपया लोकेशन स्कैन करें');
-      showToast('Now scan rack location\nअब रैक लोकेशन स्कैन करें');
+    console.log('[STORE] Starting scanner...');
+    qr.start(
+      { facingMode:'environment' },
+      { fps:10, qrbox:250 },
+      handleDecode,
+      err => console.warn('[STORE] decode error:', err)
+    )
+    .then(() => console.log('[STORE] scanner.start() resolved — camera should be live'))
+    .catch(err => {
+      console.error('[STORE] scanner startup error:', err);
+      alert('कृपया कैमरा अनुमति दें');
     });
 
-    // keyboard/hardware scanner handling
+    locBtn.addEventListener('click', () => {
+      console.log('[STORE] Scan Location button clicked — switching to rack mode');
+      locationMode = true;
+      speak('कृपया लोकेशन स्कैन करें');
+      alert('Now scan rack location\nअब रैक लोकेशन स्कैन करें');
+    });
+    //  capture hardware‐scanner keystrokes
     let buffer = '';
     function handleKbd(evt) {
-      // ignore modifier-only keys
-      if (evt.key === 'Shift' || evt.key === 'Control' || evt.key === 'Alt' || evt.key === 'Meta') return;
-
-      if (evt.key.length === 1) {
-        buffer += evt.key;
-      } else if (evt.key === 'Enter' && buffer) {
+      if (evt.key.length === 1) buffer += evt.key;
+      else if (evt.key === 'Enter' && buffer) {
         handleDecode(buffer);
+        buffer = '';
         buffer = '';
       }
     }
-
-    // toggle UI between camera/keyboard scanner
+    //  show/hide camera vs keyboard
     const cameraEl = document.getElementById('reader');
-    const kbdInput = document.getElementById('kbd-input');
+    const kbdInput = document.getElementById('kbd‐input');
     function updateScannerUI(mode) {
       if (mode === 'camera') {
         cameraEl.style.display = 'block';
         document.removeEventListener('keydown', handleKbd);
-        // ensure camera is running
-        startCameraScanner();
       } else {
         cameraEl.style.display = 'none';
         buffer = '';
@@ -205,13 +152,8 @@
       }
     }
 
-    // initial mode
+    // init & listen for toggles
     updateScannerUI(localStorage.getItem('scanMode') || 'camera');
-    window.addEventListener('scanModeChanged', e => {
-      const m = e.detail;
-      log('[STORE] scanModeChanged to', m);
-      localStorage.setItem('scanMode', m);
-      updateScannerUI(m);
-    });
+    window.addEventListener('scanModeChanged', e => updateScannerUI(e.detail));
   </script>
 {% endblock %}
