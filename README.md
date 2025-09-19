@@ -4,6 +4,10 @@
 [![Status](https://img.shields.io/badge/status-beta-yellow)]()
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
+## Live Demo
+[Try the Sandbox](https://sandipsing.pythonanywhere.com/) (read-only demo user)
+
+
 ## High-Level Summary
 
 Inventory Tracking System (ITS) is a lightweight, pragmatic real-world solution for end-to-end visibility of manufactured rolls in a plant environment. It combines QR code scanning, role-based access, material entry (manual or bulk), and movement tracking (putaway, transfer, dispatch) to give operations and management real-time insight into inventory. The system is currently hosted on an internal Windows PC using Waitress + Caddy (HTTPS) and is designed for intranet deployment.
